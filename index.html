@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis de Sentimientos</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            max-width: 1200px;
+            margin: auto;
+            background-color: #ffffff;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            margin-bottom: 30px;
+        }
+
+        canvas {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+            background-color: #ffffff;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        table, th, td {
+            border: 1px solid #dddddd;
+            text-align: left;
+            padding: 8px;
+        }
+
+        .info-box {
+            background-color: #fff5e6; /* Amarillo pastel */
+            border: 1px solid #ffdab3; /* Borde naranja pastel */
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            font-size: 32px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .chart-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .filter-label {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .filter-input {
+            padding: 8px;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .filter-button {
+            padding: 8px 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div>
+            <h1>Análisis de Sentimientos de Tweets</h1>
+
+            <!-- Agregar filtro por palabra -->
+            <div class="chart-container">
+                <label for="filterWord" class="filter-label">Filtrar por palabra clave:</label>
+                <input type="text" id="filterWord" name="filterWord" class="filter-input">
+                <button onclick="applyFilter()" class="filter-button">Aplicar Filtro</button>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="sentimentChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="sentimentPieChart"></canvas>
+            </div>
+        </div>
+
+        <div>
+            <div class="chart-container">
+                <canvas id="sentimentScatterChart"></canvas>
+            </div>
+
+            <div id="tweetDetails">
+                <h2>Detalles del Tweet Seleccionado</h2>
+                <table id="tweetTable">
+                    <thead>
+                        <tr>
+                            <th>Texto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Los datos del tweet seleccionado se agregarán aquí dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="wordChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <div id="colombiaCount" class="info-box">
+                    Número de menciones a Colombia: 0
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        async function fetchTweets() {
+            const response = await fetch('http://localhost:5000/api/tweets');
+            const tweets = await response.json();
+            return tweets;
+        }
+
+        let sentimentChartInstance;
+        let sentimentPieChartInstance;
+        let sentimentScatterChartInstance;
+        let wordChartInstance;
+
+        async function generateChart(tweets) {
+            if (sentimentChartInstance) {
+                sentimentChartInstance.destroy();
+            }
+            const ctx = document.getElementById('sentimentChart').getContext('2d');
+            sentimentChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Positivo', 'Neutral', 'Negativo'],
+                    datasets: [{
+                        label: '# de Tweets',
+                        data: await countSentiments(tweets),
+                        backgroundColor: ['rgba(75, 192, 192, 0.2)', 'rgba(255, 206, 86, 0.2)', 'rgba(255, 99, 132, 0.2)'],
+                        borderColor: ['rgba(75, 192, 192, 1)', 'rgba(255, 206, 86, 1)', 'rgba(255, 99, 132, 1)'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        async function generatePieChart(tweets) {
+            if (sentimentPieChartInstance) {
+                sentimentPieChartInstance.destroy();
+            }
+            const ctx = document.getElementById('sentimentPieChart').getContext('2d');
+            sentimentPieChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['Positivo', 'Neutral', 'Negativo'],
+                    datasets: [{
+                        label: 'Proporción de Sentimientos',
+                        data: await countSentiments(tweets),
+                        backgroundColor: ['rgba(75, 192, 192, 0.2)', 'rgba(255, 206, 86, 0.2)', 'rgba(255, 99, 132, 0.2)'],
+                        borderColor: ['rgba(75, 192, 192, 1)', 'rgba(255, 206, 86, 1)', 'rgba(255, 99, 132, 1)'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(tooltipItem) {
+                                    return `${tooltipItem.label}: ${tooltipItem.raw}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function generateScatterChart(tweets) {
+            if (sentimentScatterChartInstance) {
+                sentimentScatterChartInstance.destroy();
+            }
+            const ctx = document.getElementById('sentimentScatterChart').getContext('2d');
+            sentimentScatterChartInstance = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Relación Longitud del Texto - Sentimiento',
+                        data: tweets.map(tweet => ({
+                            x: tweet.texto.length,
+                            y: sentimentValue(tweet.sentimiento),
+                            text: tweet.texto
+                        })),
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const dataItem = context.dataset.data[context.dataIndex];
+                                    return `Longitud del Texto: ${dataItem.text.length}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            title: {
+                                display: true,
+                                text: 'Longitud del Texto'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Sentimiento'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    switch (value) {
+                                        case -1:
+                                            return 'NEG';
+                                        case 0:
+                                            return 'NEU';
+                                        case 1:
+                                            return 'POS';
+                                        default:
+                                            return '';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Evento de clic en el gráfico de dispersión para mostrar detalles del tweet
+            ctx.canvas.onclick = function(evt) {
+                const activePoint = sentimentScatterChartInstance.getElementsAtEventForMode(evt, 'nearest', { intersect: true });
+                if (activePoint.length > 0) {
+                    const tweet = tweets[activePoint[0].index];
+                    displayTweetDetails(tweet);
+                }
+            };
+        }
+
+        async function countSentiments(tweets) {
+            let positiveCount = 0;
+            let neutralCount = 0;
+            let negativeCount = 0;
+
+            tweets.forEach(tweet => {
+                switch (tweet.sentimiento) {
+                    case 'POS':
+                        positiveCount++;
+                        break;
+                    case 'NEU':
+                        neutralCount++;
+                        break;
+                    case 'NEG':
+                        negativeCount++;
+                        break;
+                    default:
+                        break;
+                }
+            });
+
+            return [positiveCount, neutralCount, negativeCount];
+        }
+
+        function sentimentValue(sentiment) {
+            switch (sentiment) {
+                case 'POS':
+                    return 1;
+                case 'NEU':
+                    return 0;
+                case 'NEG':
+                    return -1;
+                default:
+                    return 0;
+            }
+        }
+
+        function displayTweetDetails(tweet) {
+            const tableBody = document.querySelector('#tweetTable tbody');
+            tableBody.innerHTML = ''; // Limpiar tabla antes de agregar detalles
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.textContent = tweet.texto;
+            row.appendChild(cell);
+            tableBody.appendChild(row);
+        }
+
+        async function generateWordChart(tweets) {
+            const wordCount = {};
+
+            tweets.forEach(tweet => {
+                const words = tweet.texto.split(/\s+/);
+                words.forEach(word => {
+                    const lowerCaseWord = word.toLowerCase();
+                    wordCount[lowerCaseWord] = (wordCount[lowerCaseWord] || 0) + 1;
+                });
+            });
+
+            const sortedWords = Object.keys(wordCount).sort((a, b) => wordCount[b] - wordCount[a]);
+            const topWords = sortedWords.slice(0, 10);
+            const topWordCounts = topWords.map(word => wordCount[word]);
+
+            if (wordChartInstance) {
+                wordChartInstance.destroy();
+            }
+
+            const ctx = document.getElementById('wordChart').getContext('2d');
+            wordChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: topWords,
+                    datasets: [{
+                        label: 'Frecuencia de Palabras',
+                        data: topWordCounts,
+                        backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                        borderColor: 'rgba(153, 102, 255, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        async function displayColombiaCount(tweets, keyword) {
+            const colombiaCount = tweets.filter(tweet => tweet.texto.toLowerCase().includes(keyword.toLowerCase())).length;
+            document.getElementById('colombiaCount').textContent = `Número de menciones a ${keyword}: ${colombiaCount}`;
+        }
+
+        async function applyFilter() {
+            const filterWord = document.getElementById('filterWord').value;
+            const tweets = await fetchTweets();
+
+            const filteredTweets = tweets.filter(tweet => tweet.texto.toLowerCase().includes(filterWord.toLowerCase()));
+
+            await generateChart(filteredTweets);
+            await generatePieChart(filteredTweets);
+            await generateScatterChart(filteredTweets);
+            await generateWordChart(filteredTweets);
+            await displayColombiaCount(tweets, filterWord);
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const tweets = await fetchTweets();
+            await generateChart(tweets);
+            await generatePieChart(tweets);
+            await generateScatterChart(tweets);
+            await generateWordChart(tweets);
+            await displayColombiaCount(tweets, 'Colombia');
+        });
+    </script>
+</body>
+</html>

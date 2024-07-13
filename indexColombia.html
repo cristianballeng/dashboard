@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis de Sentimientos</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            max-width: 1200px;
+            margin: auto;
+            background-color: #ffffff;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            margin-bottom: 30px;
+        }
+
+        canvas {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+            background-color: #ffffff;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        table, th, td {
+            border: 1px solid #dddddd;
+            text-align: left;
+            padding: 8px;
+        }
+
+        .info-box {
+            background-color: #fff5e6; /* Amarillo pastel */
+            border: 1px solid #ffdab3; /* Borde naranja pastel */
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            font-size: 32px;
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div>
+            <h1>Análisis de Sentimientos de Tweets</h1>
+
+            <div>
+                <label for="filterWord">Filtrar por palabra clave:</label>
+                <input type="text" id="filterWord" name="filterWord">
+                <button onclick="applyFilter()">Aplicar Filtro</button>
+            </div>
+
+
+            <div class="chart-container">
+                <canvas id="sentimentChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="sentimentPieChart"></canvas>
+            </div>
+        </div>
+
+        <div>
+            <div class="chart-container">
+                <canvas id="sentimentScatterChart"></canvas>
+            </div>
+
+            <div id="tweetDetails">
+                <h2>Detalles del Tweet Seleccionado</h2>
+                <table id="tweetTable">
+                    <thead>
+                        <tr>
+                            <th>Texto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Los datos del tweet seleccionado se agregarán aquí dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="wordChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <div  id="colombiaCount" class="info-box">
+                    <!-- Aquí se mostrará el número de menciones a Colombia -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        async function fetchTweets() {
+            const response = await fetch('http://localhost:5000/api/tweets');
+            const tweets = await response.json();
+            return tweets;
+        }
+
+        function generateChart(tweets) {
+            // Filtrar tweets que contienen menciones a Colombia
+            const colombiaTweets = tweets.filter(tweet => tweet.texto.match(/colombia/i));
+            
+            // Contar los sentimientos en los tweets filtrados
+            const sentiments = colombiaTweets.map(tweet => tweet.sentimiento);
+            const sentimentCounts = sentiments.reduce((acc, sentiment) => {
+                acc[sentiment] = (acc[sentiment] || 0) + 1;
+                return acc;
+            }, {});
+
+            const ctx = document.getElementById('sentimentChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(sentimentCounts),
+                    datasets: [{
+                        label: '# de Tweets',
+                        data: Object.values(sentimentCounts),
+                        backgroundColor: ['rgba(75, 192, 192, 0.2)', 'rgba(255, 206, 86, 0.2)', 'rgba(255, 99, 132, 0.2)'],
+                        borderColor: ['rgba(75, 192, 192, 1)', 'rgba(255, 206, 86, 1)', 'rgba(255, 99, 132, 1)'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function generatePieChart(tweets) {
+            // Filtrar tweets que contienen menciones a Colombia
+            const colombiaTweets = tweets.filter(tweet => tweet.texto.match(/colombia/i));
+            
+            // Contar los sentimientos en los tweets filtrados
+            const sentiments = colombiaTweets.map(tweet => tweet.sentimiento);
+            const sentimentCounts = sentiments.reduce((acc, sentiment) => {
+                acc[sentiment] = (acc[sentiment] || 0) + 1;
+                return acc;
+            }, {});
+
+            const ctx = document.getElementById('sentimentPieChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(sentimentCounts),
+                    datasets: [{
+                        label: 'Proporción de Sentimientos',
+                        data: Object.values(sentimentCounts),
+                        backgroundColor: ['rgba(75, 192, 192, 0.2)', 'rgba(255, 206, 86, 0.2)', 'rgba(255, 99, 132, 0.2)'],
+                        borderColor: ['rgba(75, 192, 192, 1)', 'rgba(255, 206, 86, 1)', 'rgba(255, 99, 132, 1)'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(tooltipItem) {
+                                    return `${tooltipItem.label}: ${tooltipItem.raw}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function generateScatterChart(tweets) {
+            // Filtrar tweets que contienen menciones a Colombia
+            const colombiaTweets = tweets.filter(tweet => tweet.texto.match(/colombia/i));
+            
+            const ctx = document.getElementById('sentimentScatterChart').getContext('2d');
+
+            // Mapear los sentimientos a valores numéricos
+            const sentimentValues = {
+                'NEG': -1,
+                'NEU': 0,
+                'POS': 1
+            };
+
+            // Preparar los datos para el gráfico de dispersión
+            const data = colombiaTweets.map(tweet => ({
+                x: tweet.texto.length,
+                y: sentimentValues[tweet.sentimiento],
+                textLength: tweet.texto.length, // Longitud del texto para tooltip
+                text: tweet.texto // Texto completo para tabla
+            }));
+
+            const scatterChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Relación Longitud del Texto - Sentimiento',
+                        data: data,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const dataItem = context.dataset.data[context.dataIndex];
+                                    return `Longitud del Texto: ${dataItem.textLength}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            title: {
+                                display: true,
+                                text: 'Longitud del Texto'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Sentimiento'
+                            },
+                            ticks: {
+                                // Personalizar los ticks del eje Y según los valores numéricos
+                                callback: function(value) {
+                                    switch (value) {
+                                        case -1:
+                                            return 'NEG';
+                                        case 0:
+                                            return 'NEU';
+                                        case 1:
+                                            return 'POS';
+                                        default:
+                                            return value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Agregar evento para actualizar la tabla con el texto completo al hacer clic en un punto
+            ctx.canvas.addEventListener('mousemove', function(event) {
+                const activePoint = scatterChart.getElementsAtEventForMode(event, 'nearest', { intersect: true, axis: 'xy' });
+                if (activePoint.length > 0) {
+                    const selectedIndex = activePoint[0].index;
+                    const selectedTweet = colombiaTweets[selectedIndex];
+                    updateTweetTable(selectedTweet);
+                }
+            });
+
+            function updateTweetTable(tweet) {
+                const tableBody = document.getElementById('tweetTable').getElementsByTagName('tbody')[0];
+                tableBody.innerHTML = `<tr><td>${tweet.texto}</td></tr>`;
+            }
+        }
+
+        async function countWords(tweets) {
+            const wordCount = {};
+            
+            tweets.forEach(tweet => {
+                const words = tweet.texto.toLowerCase().match(/\b\w+\b/g);
+                if (words) {
+                    words.forEach(word => {
+                        // Filtrar palabras con menos de 3 letras
+                        if (word.length >= 3) {
+                            if (wordCount[word]) {
+                                wordCount[word]++;
+                            } else {
+                                wordCount[word] = 1;
+                            }
+                        }
+                    });
+                }
+            });
+
+            // Ordenar las palabras por frecuencia
+            const sortedWords = Object.keys(wordCount).sort((a, b) => wordCount[b] - wordCount[a]);
+
+            // Tomar las 10 palabras más usadas
+            const topWords = sortedWords.slice(0, 10);
+
+            // Crear un objeto con las palabras y sus frecuencias
+            const data = topWords.map(word => ({
+                palabra: word,
+                frecuencia: wordCount[word]
+            }));
+
+            return data;
+        }
+
+        function displayWordChart() {
+            fetchTweets().then(tweets => {
+                countWords(tweets).then(wordData => {
+                    const ctx = document.getElementById('wordChart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: wordData.map(item => item.palabra),
+                            datasets: [{
+                                label: 'Frecuencia de Palabras',
+                                data: wordData.map(item => item.frecuencia),
+                                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            scales: {
+                                y: {
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                });
+            });
+        }
+
+        async function countColombiaMentions(tweets) {
+            let colombiaCount = 0;
+
+            tweets.forEach(tweet => {
+                // Buscar menciones a Colombia de manera específica en el texto del tweet
+                // Puedes ajustar este criterio según cómo estén estructurados los tweets en tu API
+                if (tweet.texto.match(/colombia/i)) {
+                    colombiaCount++;
+                }
+            });
+
+            return colombiaCount;
+        }
+
+        function displayColombiaCount() {
+            fetchTweets().then(tweets => {
+                countColombiaMentions(tweets).then(colombiaCount => {
+                    const colombiaCountElement = document.getElementById('colombiaCount');
+                    colombiaCountElement.textContent = `Número de menciones a Colombia: ${colombiaCount}`;
+                });
+            });
+        }
+
+        displayColombiaCount();
+
+        fetchTweets().then(tweets => {
+            generateChart(tweets);
+            generatePieChart(tweets);
+            generateScatterChart(tweets);
+            displayWordChart();
+        });
+    </script>
+</body>
+</html>
